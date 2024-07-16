@@ -1,0 +1,88 @@
+import pandas as pd
+
+def read_combined_dfs_from_excel(input_file):
+    def read_df_from_sheet(sheet, start_row, start_col):
+        data = sheet.iloc[start_row:, start_col:]
+        if data.isnull().all().all():  # Check if the dataframe is empty
+            return None
+        data = data.dropna(how='all', axis=1).dropna(how='all', axis=0)
+        return data
+
+    def find_start_row_col(sheet, title):
+        for idx, row in sheet.iterrows():
+            for col, value in enumerate(row):
+                if value == title:
+                    return idx, col
+        return None, None
+
+    rates_dfs = {
+        "": [None, None, None],
+        "_SS": [None, None, None],
+        "D2D": [None, None, None]
+    }
+    
+    curves_dfs = {
+        "": [None, None],
+        "_SS": [None, None],
+        "D2D": [None, None]
+    }
+
+    xls = pd.ExcelFile(input_file)
+    rates_sheet = pd.read_excel(xls, 'Rates')
+    curves_sheet = pd.read_excel(xls, 'Curves')
+
+    # Read Rates
+    rates_titles = ["3M", "3M_SS", "6M", "6M_SS", "ESTR", "ESTR_SS"]
+    d2d_rate_titles = ["3M_D2D", "6M_D2D", "ESTR_D2D"]
+
+    start_row, start_col = find_start_row_col(rates_sheet, "D2C")
+    if start_row is not None:
+        start_row += 1  # Skip the title row
+        col_idx = start_col
+        for idx, title in enumerate(rates_titles):
+            df = read_df_from_sheet(rates_sheet, start_row, col_idx)
+            if idx % 2 == 0:
+                rates_dfs[""][idx // 2] = df
+            else:
+                rates_dfs["_SS"][idx // 2] = df
+            col_idx += df.shape[1] + 2 if df is not None else 2
+
+    start_row, start_col = find_start_row_col(rates_sheet, "D2D")
+    if start_row is not None:
+        start_row += 1  # Skip the title row
+        col_idx = start_col
+        for idx, title in enumerate(d2d_rate_titles):
+            df = read_df_from_sheet(rates_sheet, start_row, col_idx)
+            rates_dfs["D2D"][idx] = df
+            col_idx += df.shape[1] + 2 if df is not None else 2
+
+    # Read Curves
+    curve_titles = ["Common", "Specific"]
+
+    start_row, start_col = find_start_row_col(curves_sheet, "D2C")
+    if start_row is not None:
+        start_row += 1  # Skip the title row
+        col_idx = start_col
+        for suffix in ["", "_SS"]:
+            for idx, title in enumerate(curve_titles):
+                df = read_df_from_sheet(curves_sheet, start_row, col_idx)
+                curves_dfs[suffix][idx] = df
+                col_idx += df.shape[1] + 2 if df is not None else 2
+
+    start_row, start_col = find_start_row_col(curves_sheet, "D2D")
+    if start_row is not None:
+        start_row += 1  # Skip the title row
+        col_idx = start_col
+        for idx, title in enumerate(curve_titles):
+            df = read_df_from_sheet(curves_sheet, start_row, col_idx)
+            curves_dfs["D2D"][idx] = df
+            col_idx += df.shape[1] + 2 if df is not None else 2
+
+    return rates_dfs, curves_dfs
+
+# Example usage
+rates_dfs, curves_dfs = read_combined_dfs_from_excel("output.xlsx")
+
+# The returned dictionaries will have the same structure as the input dictionaries
+print(rates_dfs)
+print(curves_dfs)
