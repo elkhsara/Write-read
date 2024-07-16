@@ -1,0 +1,159 @@
+import pandas as pd
+
+def read_combined_dfs_from_excel(file_path):
+    def read_section(sheet, start_row, start_col, titles):
+        dfs = []
+        for title in titles:
+            # Find the title cell
+            found = False
+            for col in range(start_col, start_col + 100):  # Assuming the title is within the next 100 columns
+                if sheet.cell(row=start_row, column=col).value == title:
+                    start_col = col
+                    found = True
+                    break
+            
+            if not found:
+                dfs.append(None)
+                continue
+
+            # Read the dataframe
+            df = pd.read_excel(file_path, sheet_name=sheet.title, header=start_row, startrow=start_row, usecols=range(start_col, start_col + 100))
+            if df.empty:
+                dfs.append(None)
+            else:
+                dfs.append(df)
+            start_col += len(df.columns) + 2  # Move to the next title position (assuming 2 columns space between dataframes)
+        
+        return dfs
+
+    # Read Rates
+    wb = pd.ExcelFile(file_path)
+    ws_rates = wb.parse("Rates")
+    ws_curves = wb.parse("Curves")
+
+    # Read Rates section
+    rate_titles = ["3M", "3M_SS", "6M", "6M_SS", "ESTR", "ESTR_SS"]
+    start_row = 1
+    start_col = 1
+    rates_section = read_section(ws_rates, start_row + 1, start_col, rate_titles)
+    
+    d2d_titles = ["3M_D2D", "6M_D2D", "ESTR_D2D"]
+    start_row += max([len(df) for df in rates_section if df is not None]) + 4  # Move to D2D section row
+    d2d_rates_section = read_section(ws_rates, start_row + 1, start_col, d2d_titles)
+
+    combined_rates = {
+        "": rates_section[:3],
+        "_SS": rates_section[3:],
+        "D2D": d2d_rates_section
+    }
+
+    # Read Curves section
+    curve_titles = ["Common", "Specific"]
+    start_row = 1
+    start_col = 1
+    curves_section = read_section(ws_curves, start_row + 1, start_col, [f"{title}" for title in curve_titles])
+
+    d2d_curves_section = read_section(ws_curves, start_row + max([len(df) for df in curves_section if df is not None]) + 4 + 1, start_col, [f"{title} D2D" for title in curve_titles])
+
+    combined_curves = {
+        "": curves_section,
+        "_SS": read_section(ws_curves, start_row + 1, start_col, [f"{title} _SS" for title in curve_titles]),
+        "D2D": d2d_curves_section
+    }
+
+    return combined_rates, combined_curves
+
+# Usage example
+combined_rates, combined_curves = read_combined_dfs_from_excel("output.xlsx")
+
+
+
+import pandas as pd
+
+def read_combined_dfs_from_excel(input_file):
+    # Initialize the dictionary structure
+    combined_rates = {
+        "": [None, None, None],
+        "_SS": [None, None, None],
+        "D2D": [None, None, None]
+    }
+
+    combined_curves = {
+        "": [None, None],
+        "_SS": [None, None],
+        "D2D": [None, None]
+    }
+
+    # Read the Excel file
+    xls = pd.ExcelFile(input_file)
+
+    # Read Rates
+    if 'Rates' in xls.sheet_names:
+        df_rates = pd.read_excel(input_file, sheet_name='Rates', header=None)
+
+        # Process Rates for "" and "_SS"
+        start_row = 1
+        start_col = 1
+
+        if df_rates.iat[start_row-1, start_col-1] == "D2C":
+            start_row += 1
+
+            for suffix in ["", "_SS"]:
+                for idx in range(3):
+                    if df_rates.iat[start_row, start_col-1] is not None:
+                        title = df_rates.iat[start_row, start_col-1]
+                        df = pd.read_excel(input_file, sheet_name='Rates', header=start_row+1, usecols=[start_col, start_col+1, start_col+2])
+                        combined_rates[suffix][idx] = df
+                    start_col += 4
+
+            # Process Rates for "D2D"
+            start_row += max(len(df) for df in combined_rates[""] if df is not None) + 5
+            start_col = 1
+
+            if df_rates.iat[start_row-1, start_col-1] == "D2D":
+                start_row += 1
+
+                for idx in range(3):
+                    if df_rates.iat[start_row, start_col-1] is not None:
+                        title = df_rates.iat[start_row, start_col-1]
+                        df = pd.read_excel(input_file, sheet_name='Rates', header=start_row+1, usecols=[start_col, start_col+1, start_col+2])
+                        combined_rates["D2D"][idx] = df
+                    start_col += 4
+
+    # Read Curves
+    if 'Curves' in xls.sheet_names:
+        df_curves = pd.read_excel(input_file, sheet_name='Curves', header=None)
+
+        # Process Curves for "" and "_SS"
+        start_row = 1
+        start_col = 1
+
+        if df_curves.iat[start_row-1, start_col-1] == "D2C":
+            start_row += 1
+
+            for suffix in ["", "_SS"]:
+                for idx in range(2):
+                    if df_curves.iat[start_row, start_col-1] is not None:
+                        title = df_curves.iat[start_row, start_col-1]
+                        df = pd.read_excel(input_file, sheet_name='Curves', header=start_row+1, usecols=[start_col, start_col+1])
+                        combined_curves[suffix][idx] = df
+                    start_col += 3
+
+            # Process Curves for "D2D"
+            start_row += max(len(df) for df in combined_curves[""] if df is not None) + 5
+            start_col = 1
+
+            if df_curves.iat[start_row-1, start_col-1] == "D2D":
+                start_row += 1
+
+                for idx in range(2):
+                    if df_curves.iat[start_row, start_col-1] is not None:
+                        title = df_curves.iat[start_row, start_col-1]
+                        df = pd.read_excel(input_file, sheet_name='Curves', header=start_row+1, usecols=[start_col, start_col+1])
+                        combined_curves["D2D"][idx] = df
+                    start_col += 3
+
+    return combined_rates, combined_curves
+
+# Example usage
+combined_rates, combined_curves = read_combined_dfs_from_excel("output.xlsx")
