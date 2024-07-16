@@ -1,0 +1,98 @@
+import pandas as pd
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+import string
+
+
+nltk.download('stopwords')
+nltk.download('punkt')
+
+def remove_punctuation(text):
+    translator = str.maketrans('', '', string.punctuation)
+    return text.translate(translator)
+
+def lowercase(text):
+    return text.lower()
+
+stop_words = set(stopwords.words('english'))
+
+def remove_stopwords(text):
+    tokens = word_tokenize(text)
+    filtered_tokens = [word for word in tokens if word not in stop_words]
+    return ' '.join(filtered_tokens)
+
+
+from nltk.stem import WordNetLemmatizer
+
+nltk.download('wordnet')
+lemmatizer = WordNetLemmatizer()
+
+def lemmatize(text):
+    tokens = word_tokenize(text)
+    lemmatized_tokens = [lemmatizer.lemmatize(word) for word in tokens]
+    return ' '.join(lemmatized_tokens)
+
+
+
+def preprocess_text(text):
+    text = remove_punctuation(text)
+    text = lowercase(text)
+    text = remove_stopwords(text)
+    # text = lemmatize(text)  # Optionnel: Décommentez cette ligne si vous souhaitez lemmatiser le texte
+    return text
+
+# Appliquer le prétraitement sur la colonne 'contenu_article'
+df['cleaned_article'] = df['contenu_article'].apply(preprocess_text)
+
+# Visualiser les résultats
+print(df[['contenu_article', 'cleaned_article']].head())
+
+
+
+
+#finbert embd
+from transformers import AutoTokenizer, AutoModel
+
+# Chargement du tokenizer et du modèle FinBert
+tokenizer = AutoTokenizer.from_pretrained("yiyanghkust/finbert-tone")
+model = AutoModel.from_pretrained("yiyanghkust/finbert-tone")
+
+# Fonction pour obtenir les embeddings à partir de FinBert
+def get_embeddings(text):
+    # Tokeniser le texte et obtenir les embeddings
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+    with torch.no_grad():
+        outputs = model(**inputs)
+    embeddings = outputs.last_hidden_state.mean(dim=1).squeeze()  # Moyenne des embeddings
+    return embeddings.numpy()  # Retourne les embeddings comme tableau numpy
+
+# Appliquer la fonction à chaque article dans le DataFrame
+df['finbert_embeddings'] = df['contenu_article'].apply(get_embeddings)
+
+# Visualiser les résultats
+print(df[['contenu_article', 'finbert_embeddings']].head())
+
+
+
+#nltk
+
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
+# Télécharger les ressources nécessaires pour NLTK (une seule fois)
+nltk.download('vader_lexicon')
+
+# Initialisation de l'analyseur de sentiment VADER
+sid = SentimentIntensityAnalyzer()
+
+# Fonction pour obtenir le score de sentiment pour chaque article
+def get_sentiment_scores(text):
+    sentiment_scores = sid.polarity_scores(text)
+    return sentiment_scores['compound']  # Utilisation du score 'compound'
+
+# Appliquer la fonction à chaque article dans le DataFrame
+df['sentiment_score'] = df['contenu_article'].apply(get_sentiment_scores)
+
+# Visualiser les résultats
+print(df[['contenu_article', 'sentiment_score']].head())
